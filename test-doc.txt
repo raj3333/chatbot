@@ -1,0 +1,17 @@
+IFSF Test Document
+
+This is a test document about IFSF specifications and hackathons.
+
+IFSF (International Forecourt Standards Forum) provides standards for:
+- Payment processing at fuel stations
+- Point of sale systems
+- Fuel dispensing protocols
+- Security requirements
+
+Hackathons in the IFSF context focus on:
+- Innovation in payment systems
+- API integrations
+- Compliance solutions
+- Technical implementations
+
+This document contains information that should be searchable once indexed in Kendra.

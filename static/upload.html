@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IFSF Document Upload & Chat</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; background: #f8f9fa; }
+        .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h1 { color: #2c3e50; margin-bottom: 10px; }
+        .header p { color: #6c757d; font-size: 16px; }
+        .tabs { display: flex; margin-bottom: 20px; border-bottom: 2px solid #e9ecef; }
+        .tab { padding: 12px 24px; cursor: pointer; border: none; background: none; font-size: 16px; color: #6c757d; }
+        .tab.active { color: #007bff; border-bottom: 2px solid #007bff; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .upload-form, .chat-form { background: #f8f9fa; padding: 25px; border-radius: 8px; margin-bottom: 20px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; color: #495057; }
+        input, select, textarea { width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 6px; font-size: 14px; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #007bff; }
+        button { background: #007bff; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600; width: 100%; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        .status { margin-top: 20px; padding: 15px; border-radius: 6px; font-weight: 500; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .progress { width: 100%; height: 20px; background: #f0f0f0; border-radius: 10px; overflow: hidden; margin: 10px 0; }
+        .progress-bar { height: 100%; background: #007bff; transition: width 0.3s; }
+        .chat-messages { max-height: 400px; overflow-y: auto; background: white; border: 1px solid #e9ecef; border-radius: 6px; padding: 15px; margin-bottom: 15px; }
+        .message { margin-bottom: 15px; padding: 10px; border-radius: 6px; }
+        .user-message { background: #007bff; color: white; margin-left: 20%; }
+        .bot-message { background: #f8f9fa; border: 1px solid #e9ecef; margin-right: 20%; }
+        .sources { font-size: 12px; color: #6c757d; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 IFSF Document Analysis Platform</h1>
+            <p>Upload documents and chat with AI about IFSF specifications</p>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('upload')">📤 Upload Documents</button>
+            <button class="tab" onclick="showTab('chat')">💬 AI Chat</button>
+        </div>
+        
+        <div id="upload" class="tab-content active">
+            <div class="upload-form">
+                <form id="uploadForm">
+                    <div class="form-group">
+                        <label for="partnerId">📋 Partner ID:</label>
+                        <input type="text" id="partnerId" required placeholder="e.g., partner-001, hec, acme-corp">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="documentType">📄 Document Type:</label>
+                        <select id="documentType" required>
+                            <option value="">Select document type...</option>
+                            <option value="specification">IFSF Specification</option>
+                            <option value="implementation">Partner Implementation</option>
+                            <option value="baseline">Baseline Document</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="fileInput">📎 Select PDF Document (Max 50MB):</label>
+                        <input type="file" id="fileInput" accept=".pdf" required>
+                    </div>
+                    
+                    <button type="submit" id="uploadBtn">🚀 Upload Document</button>
+                </form>
+                
+                <div id="uploadProgress" style="display: none;">
+                    <div class="progress">
+                        <div class="progress-bar" id="progressBar"></div>
+                    </div>
+                    <p id="progressText">Uploading...</p>
+                </div>
+            </div>
+            
+            <div id="uploadStatus"></div>
+        </div>
+        
+        <div id="chat" class="tab-content">
+            <div class="chat-form">
+                <div class="form-group">
+                    <label for="chatPartnerId">📋 Partner ID (for context):</label>
+                    <input type="text" id="chatPartnerId" placeholder="e.g., hec (optional)">
+                </div>
+                
+                <div id="chatMessages" class="chat-messages">
+                    <div class="message bot-message">
+                        <strong>🤖 IFSF Assistant:</strong> Hello! I can help you with IFSF specification questions. Upload some documents first, then ask me anything about them.
+                    </div>
+                </div>
+                
+                <form id="chatForm">
+                    <div class="form-group">
+                        <textarea id="questionInput" rows="3" placeholder="Ask me about IFSF specifications, implementation details, or document comparisons..." required></textarea>
+                    </div>
+                    <button type="submit" id="chatBtn">💬 Ask Question</button>
+                </form>
+            </div>
+            
+            <div id="chatStatus"></div>
+        </div>
+        
+        <div id="systemStatus" class="status success" style="margin-top: 30px;">
+            <strong>🔧 System Status:</strong><br>
+            ✅ Document Upload: Ready<br>
+            ✅ S3 Storage: Active<br>
+            ✅ API Gateway: Online<br>
+            ✅ Kendra Search: Connected (us-east-1)<br>
+            ✅ AI Chat: Ready
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://lx6f0lmp1h.execute-api.us-east-1.amazonaws.com/dev';
+        
+        function showTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        // Upload functionality
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const partnerId = document.getElementById('partnerId').value;
+            const documentType = document.getElementById('documentType').value;
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            const uploadBtn = document.getElementById('uploadBtn');
+            
+            if (!file) {
+                showUploadStatus('❌ Please select a PDF file to upload', 'error');
+                return;
+            }
+            
+            if (file.size > 52428800) {
+                showUploadStatus('❌ File size exceeds 50MB limit. Please choose a smaller file.', 'error');
+                return;
+            }
+            
+            try {
+                uploadBtn.disabled = true;
+                uploadBtn.textContent = '⏳ Uploading...';
+                showProgress(true);
+                showUploadStatus('🔄 Converting file and uploading...', 'info');
+                
+                const fileData = await fileToBase64(file);
+                
+                const response = await fetch(`${API_BASE}/upload`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fileName: file.name,
+                        partnerId: partnerId,
+                        documentType: documentType,
+                        fileData: fileData
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `Server error (${response.status})`);
+                }
+                
+                const result = await response.json();
+                
+                showUploadStatus(`✅ Document uploaded successfully! Document ID: ${result.documentId}`, 'success');
+                document.getElementById('uploadForm').reset();
+                
+                // Auto-fill partner ID in chat tab
+                document.getElementById('chatPartnerId').value = partnerId;
+                
+            } catch (error) {
+                console.error('Upload error:', error);
+                showUploadStatus(`❌ Upload failed: ${error.message}`, 'error');
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = '🚀 Upload Document';
+                showProgress(false);
+            }
+        });
+        
+        // Chat functionality
+        document.getElementById('chatForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const question = document.getElementById('questionInput').value;
+            const partnerId = document.getElementById('chatPartnerId').value;
+            const chatBtn = document.getElementById('chatBtn');
+            
+            if (!question.trim()) return;
+            
+            // Add user message
+            addMessage(question, 'user');
+            document.getElementById('questionInput').value = '';
+            
+            try {
+                chatBtn.disabled = true;
+                chatBtn.textContent = '🤔 Thinking...';
+                
+                const response = await fetch(`${API_BASE}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        question: question,
+                        partnerId: partnerId || 'general'
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Server error (${response.status})`);
+                }
+                
+                const result = await response.json();
+                
+                // Add bot response
+                addMessage(result.answer, 'bot', result.sources);
+                
+            } catch (error) {
+                console.error('Chat error:', error);
+                addMessage(`Sorry, I encountered an error: ${error.message}`, 'bot');
+            } finally {
+                chatBtn.disabled = false;
+                chatBtn.textContent = '💬 Ask Question';
+            }
+        });
+        
+        function addMessage(text, sender, sources = []) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}-message`;
+            
+            let content = `<strong>${sender === 'user' ? '👤 You:' : '🤖 IFSF Assistant:'}</strong> ${text}`;
+            
+            if (sources && sources.length > 0) {
+                content += `<div class="sources">📚 Sources: ${sources.join(', ')}</div>`;
+            }
+            
+            messageDiv.innerHTML = content;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = error => reject(error);
+            });
+        }
+        
+        function showProgress(show) {
+            const progressDiv = document.getElementById('uploadProgress');
+            progressDiv.style.display = show ? 'block' : 'none';
+            if (show) {
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += 10;
+                    document.getElementById('progressBar').style.width = progress + '%';
+                    if (progress >= 100) clearInterval(interval);
+                }, 200);
+            }
+        }
+        
+        function showUploadStatus(message, type) {
+            const statusDiv = document.getElementById('uploadStatus');
+            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+        
+        // File input validation
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                if (file.size > 52428800) {
+                    showUploadStatus('⚠️ Warning: File size exceeds 50MB limit', 'warning');
+                } else if (!file.name.toLowerCase().endsWith('.pdf')) {
+                    showUploadStatus('⚠️ Warning: Please select a PDF file', 'warning');
+                } else {
+                    showUploadStatus(`📄 Selected: ${file.name} (${(file.size/1024/1024).toFixed(2)} MB)`, 'info');
+                }
+            }
+        });
+    </script>
+</body>
+</html>

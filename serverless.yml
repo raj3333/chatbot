@@ -1,0 +1,198 @@
+service: ifsf-chatbot
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  environment:
+    DOCUMENTS_BUCKET: ${self:service}-documents-${self:provider.stage}
+    WEBSITE_BUCKET: ${self:service}-website-${self:provider.stage}
+    METADATA_TABLE: ${self:service}-metadata-${self:provider.stage}
+    KENDRA_INDEX_ID: '9e114d19-9409-4091-9a9a-3afd6f483b66'
+    KENDRA_REGION: 'us-east-1'
+    BEDROCK_MODEL_ID: anthropic.claude-3-haiku-20240307-v1:0
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - bedrock:InvokeModel
+            - kendra:Query
+            - kendra:BatchPutDocument
+            - s3:GetObject
+            - s3:PutObject
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:GetItem
+          Resource: '*'
+
+functions:
+  documentIngest:
+    handler: src/handlers/documentIngest.handler
+    timeout: 300
+    memorySize: 1024
+    events:
+      - s3:
+          bucket: ${self:provider.environment.DOCUMENTS_BUCKET}
+          event: s3:ObjectCreated:*
+          existing: true
+
+  indexer:
+    handler: src/handlers/indexer.handler
+    timeout: 300
+    events:
+      - stream:
+          type: dynamodb
+          arn: !GetAtt MetadataTable.StreamArn
+
+  comparator:
+    handler: src/handlers/comparator.handler
+    timeout: 60
+
+  qaHandler:
+    handler: src/handlers/qaHandler.handler
+    timeout: 30
+
+  lexProxy:
+    handler: src/handlers/lexProxy.handler
+    timeout: 30
+
+  presign:
+    handler: src/handlers/presign.handler
+    timeout: 10
+    events:
+      - http:
+          path: /presign
+          method: post
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+
+  chatApi:
+    handler: src/handlers/chatApi.handler
+    timeout: 30
+    events:
+      - http:
+          path: /chat
+          method: post
+          cors: true
+      - http:
+          path: /chat
+          method: options
+          cors: true
+
+  upload:
+    handler: src/handlers/upload.handler
+    timeout: 30
+    memorySize: 512
+    events:
+      - http:
+          path: /upload
+          method: post
+          cors: true
+
+  reindexDocuments:
+    handler: src/handlers/reindexDocuments.handler
+    timeout: 300
+    memorySize: 1024
+    events:
+      - http:
+          path: /reindex
+          method: post
+          cors: true
+
+  testBedrock:
+    handler: src/handlers/testBedrock.handler
+    timeout: 30
+    events:
+      - http:
+          path: /test-bedrock
+          method: get
+          cors: true
+
+  debugContent:
+    handler: src/handlers/debugContent.handler
+    timeout: 60
+    memorySize: 512
+    events:
+      - http:
+          path: /debug-content
+          method: get
+          cors: true
+
+resources:
+  Resources:
+    DocumentsBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:provider.environment.DOCUMENTS_BUCKET}
+        BucketEncryption:
+          ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+
+    WebsiteBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:provider.environment.WEBSITE_BUCKET}
+        WebsiteConfiguration:
+          IndexDocument: upload.html
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: false
+          BlockPublicPolicy: false
+          IgnorePublicAcls: false
+          RestrictPublicBuckets: false
+
+    WebsiteBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref WebsiteBucket
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Principal: '*'
+              Action: s3:GetObject
+              Resource: !Join ['', [!GetAtt WebsiteBucket.Arn, '/*']]
+
+    MetadataTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.METADATA_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: documentId
+            AttributeType: S
+          - AttributeName: partnerId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: documentId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: partner-index
+            KeySchema:
+              - AttributeName: partnerId
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
+
+  Outputs:
+    WebsiteURL:
+      Value: !GetAtt WebsiteBucket.WebsiteURL
+    ApiGatewayUrl:
+      Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${self:provider.stage}'
+
+plugins:
+  - serverless-offline
